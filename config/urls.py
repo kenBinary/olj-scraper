@@ -1,0 +1,6 @@
+BASE_URL = "https://www.onlinejobs.ph"
+BASE_JOB_DETAIL_URL = "https://www.onlinejobs.ph/jobseekers/job/"
+BASE_JOB_SEARCH_URL = "https://www.onlinejobs.ph/jobseekers/jobsearch?jobkeyword="
+BASE_JOB_SEARCH_GIG_URL = "https://www.onlinejobs.ph/jobseekers/jobsearch?&skill_tags=&gig=on&isFromJobsearchForm=1&jobkeyword="
+BASE_JOB_SEARCH_PARTTIME_URL = "https://www.onlinejobs.ph/jobseekers/jobsearch?&skill_tags=&partTime=on&isFromJobsearchForm=1&jobkeyword="
+BASE_JOB_SEARCH_FULLTIME_URL = "https://www.onlinejobs.ph/jobseekers/jobsearch?&skill_tags=&fullTime=on&isFromJobsearchForm=1&jobkeyword="
