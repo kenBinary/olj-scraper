@@ -14,4 +14,4 @@ def get_all_jobs(session) -> list[Job]:
 
 
 def get_job_by_job_id(session, job_id) -> Job | None:
-    return session.query(Job).filter(Job.id == job_id).first()
+    return session.query(Job).filter(Job.job_id == job_id).first()
