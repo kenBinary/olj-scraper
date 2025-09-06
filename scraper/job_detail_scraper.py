@@ -4,13 +4,25 @@ from bs4 import BeautifulSoup
 import config.urls
 from db.models.Job import Job
 import parser.parsers as parsers
-from services.logger.logger_config import Logger
+import random
+from config.user_agents import user_agents
 
 
-def scrape_job_detail(job_id, logger: Logger) -> Job:
-    logger.info(f"Scraping job detail for Job ID: {job_id}")
+def scrape_job_detail(job_id, index, logger) -> Job:
+    logger.info(f"Job {index}: Scraping job detail for Job ID: {job_id}")
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Sec-CH-UA": '"Not;A=Brand";v="99", "Microsoft Edge";v="139", "Chromium";v="139"',
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-site",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    }
     url = config.urls.BASE_JOB_DETAIL_URL + str(job_id)
-    response = requests.get(url)
+    response = requests.get(url, headers=headers)
 
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, "html.parser")
