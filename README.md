@@ -72,3 +72,9 @@ Summaries are generated using the DeepSeek V3.1 model via OpenRouter. Make sure 
 ```bash
 python main.py --dev
 ```
+
+## Scripts
+```bash
+python -m scripts.remove_nulls --dev   # Local DB
+python -m scripts.remove_nulls --prod  # Remote DB
+```
