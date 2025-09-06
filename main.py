@@ -13,6 +13,7 @@ from services.google_ai.Gemini import (
     generate_summaries_async,
 )
 from utils.args_init import init_cli_args
+from utils.remove_nulls import remove_null_entries
 
 
 def main():
@@ -80,6 +81,7 @@ def main():
     logger.info(
         f"Total execution time: {end_time_scraping - start_time_scraping:.2f} seconds"
     )
+    remove_null_entries(logger, env="prod" if args.prod else "dev")
 
 
 if __name__ == "__main__":
