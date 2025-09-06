@@ -8,16 +8,16 @@ from db.models.Job import Job
 
 def main():
     args = init_cli_args()
-    print("Creating database tables...")
+    print("Cleaning/Removing database tables...")
     if args.prod:
         print("Using remote database")
         engine = engine_init_remote()
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.drop_all(bind=engine)
     else:
         print("Using local database")
         engine = engine_init_local()
-        Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully.")
+        Base.metadata.drop_all(bind=engine)
+    print("Database tables removed successfully.")
 
 
 if __name__ == "__main__":
