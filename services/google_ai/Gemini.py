@@ -32,7 +32,7 @@ def ask_model(client) -> str:
 async def generate_summaries_async(client, jobs: List[Job]) -> None:
     tasks = []
     for job in jobs:
-        task = generate_job_summary_async(client, job.job_overview, job.link)
+        task = generate_job_summary_async(client, job.str_no_summary(), job.link)
         tasks.append((job, task))
     results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
 
@@ -66,7 +66,9 @@ async def generate_job_summary_async(client, job_info, apply_link=None) -> str:
     IMPORTANT:
     - Do NOT include any preamble, introduction, or phrases like "Here is a compact Telegram-ready job summary" or "Summary:". 
     - Output ONLY the final Telegram message in the requested format.
-    - Start directly with the job title or emoji heading.
+    - Start directly with the job title.
+    - Format it using plain text, no markdown.
+    - Output ONLY the final Telegram message in the requested format.
 
     Here is the job information:
 
@@ -110,8 +112,9 @@ def generate_job_summary(client, job_info, apply_link=None) -> str:
     Use short, clear bullet points where appropriate. Keep formatting readable and professional. Do not include unnecessary details.
     IMPORTANT:
     - Do NOT include any preamble, introduction, or phrases like "Here is a compact Telegram-ready job summary" or "Summary:". 
+    - Start directly with the job title.
+    - Format it using plain text, no markdown.
     - Output ONLY the final Telegram message in the requested format.
-    - Start directly with the job title or emoji heading.
 
     Here is the job information:
 

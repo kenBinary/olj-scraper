@@ -42,6 +42,7 @@ def main():
             logger,
         )
         jobs.append(jobDetail)
+        time.sleep(1)
 
     logger.info("Generating job summaries asynchronously...")
     start_time = time.time()
