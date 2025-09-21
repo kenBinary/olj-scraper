@@ -9,6 +9,7 @@ from services.logger.logger_config import Logger
 import os
 from dotenv import load_dotenv
 import re
+from sqlalchemy import func
 
 app = FastAPI()
 
@@ -109,7 +110,7 @@ def read_jobs(
 
         if salary:
             salary = salary.strip()
-            filters.append(Job.salary.ilike(f"%{salary}%"))
+            filters.append(func.lower(Job.salary).like(f"%{salary.lower()}%"))
 
         if posted_after:
             filters.append(Job.date_created >= posted_after)
@@ -123,13 +124,13 @@ def read_jobs(
 
             for keyword in keywords:
                 keyword_filter = or_(
-                    Job.title.ilike(f"%{keyword}%"),
-                    Job.job_overview.ilike(f"%{keyword}%"),
+                    func.trim(Job.title).like(f"%{keyword}%"),
+                    func.trim(Job.job_overview).like(f"%{keyword}%"),
                 )
                 search_filters.append(keyword_filter)
 
             if search_filters:
-                filters.extend(search_filters)
+                filters.append(or_(*search_filters))
 
         if filters:
             query = query.filter(and_(*filters))
