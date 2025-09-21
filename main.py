@@ -1,3 +1,4 @@
+import random
 import time
 import asyncio
 from typing import List
@@ -18,10 +19,10 @@ from utils.remove_nulls import remove_null_entries
 
 def main():
     args = init_cli_args()
-    print(f"Running in {'development' if args.dev else 'production'} mode")
+    logger = Logger("main").get()
+    logger.info(f"Running in {'development' if args.dev else 'production'} mode")
 
     start_time_scraping = time.time()
-    logger = Logger("main").get()
     logger.info("Starting job scraper application")
     try:
         logger.info("Scraping all job listings...")
@@ -41,8 +42,10 @@ def main():
             index,
             logger,
         )
+        if not jobDetail:
+            continue
         jobs.append(jobDetail)
-        time.sleep(1)
+        time.sleep(random.uniform(2, 5))
 
     logger.info("Generating job summaries asynchronously...")
     start_time = time.time()

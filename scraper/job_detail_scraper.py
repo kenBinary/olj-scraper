@@ -12,24 +12,19 @@ def scrape_job_detail(job_id, index, logger) -> Job:
     logger.info(f"Job {index}: Scraping job detail for Job ID: {job_id}")
     headers = {
         "User-Agent": random.choice(user_agents),
-        "Sec-CH-UA": '"Not;A=Brand";v="99", "Microsoft Edge";v="139", "Chromium";v="139"',
-        "Sec-CH-UA-Mobile": "?0",
-        "Sec-CH-UA-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-site",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
     }
     url = config.urls.BASE_JOB_DETAIL_URL + str(job_id)
-    response = requests.get(url, headers=headers)
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+    except Exception as e:
+        logger.error(f"Request failed for Job ID {job_id}: {e}")
+        return None
 
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, "html.parser")
         title = parsers.get_title(soup)
-
         work_type = parsers.get_work_type(soup)
-
         salary = parsers.get_salary(soup)
         hours_per_week = parsers.get_hours_per_week(soup)
         job_overview = parsers.get_job_overview(soup)
@@ -50,3 +45,4 @@ def scrape_job_detail(job_id, index, logger) -> Job:
         logger.error(
             f"Failed to retrieve job details for Job ID {job_id}. Status code: {response.status_code}"
         )
+        return None
