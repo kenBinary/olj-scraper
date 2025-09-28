@@ -35,6 +35,7 @@ pip install -r requirements.txt
 	 - Create a `.env` file in the root directory and add your DeepSeek API key:
 		 ```env
 		 DEEPSEEK_V3_OPENROUTER_API_KEY=your_api_key_here
+		 GEMINI_API_KEY=your_api_key_here
          TURSO_DATABASE_URL=your_turso_db_url_here
          TURSO_AUTH_TOKEN=your_turso_auth_token_here
 		 ```
