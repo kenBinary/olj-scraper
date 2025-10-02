@@ -118,20 +118,6 @@ def read_jobs(
         if posted_before:
             filters.append(Job.date_created <= posted_before)
 
-        if q:
-            keywords = [keyword.strip() for keyword in q.split(",") if keyword.strip()]
-            search_filters = []
-
-            for keyword in keywords:
-                keyword_filter = or_(
-                    func.trim(Job.title).like(f"%{keyword}%"),
-                    func.trim(Job.job_overview).like(f"%{keyword}%"),
-                )
-                search_filters.append(keyword_filter)
-
-            if search_filters:
-                filters.append(or_(*search_filters))
-
         if filters:
             query = query.filter(and_(*filters))
 
@@ -145,8 +131,28 @@ def read_jobs(
             query = query.order_by(desc(Job.date_created))
 
         total_count = query.count()
-
         jobs = query.offset(offset).limit(limit).all()
+
+        if q:
+            keywords = [
+                keyword.strip().lower() for keyword in q.split(",") if keyword.strip()
+            ]
+
+            filtered_jobs = []
+            for job in jobs:
+                job_title = (job.title or "").strip().lower()
+                job_overview = (job.job_overview or "").strip().lower()
+
+                match_found = False
+                for keyword in keywords:
+                    if keyword in job_title or keyword in job_overview:
+                        match_found = True
+                        break
+
+                if match_found:
+                    filtered_jobs.append(job)
+
+            jobs = filtered_jobs
 
         total_pages = (total_count + limit - 1) // limit
         current_page = (offset // limit) + 1
