@@ -33,12 +33,13 @@ pip install -r requirements.txt
 
 2. **Environment Variables**
 	 - Create a `.env` file in the root directory and add your DeepSeek API key:
-		 ```env
-		 DEEPSEEK_V3_OPENROUTER_API_KEY=your_api_key_here
-		 GEMINI_API_KEY=your_api_key_here
-         TURSO_DATABASE_URL=your_turso_db_url_here
-         TURSO_AUTH_TOKEN=your_turso_auth_token_here
-		 ```
+		```env
+		DEEPSEEK_V3_OPENROUTER_API_KEY=your_api_key_here
+		GEMINI_API_KEY=your_api_key_here
+        TURSO_DATABASE_URL=your_turso_db_url_here
+        TURSO_AUTH_TOKEN=your_turso_auth_token_here
+		WEBHOOK_URL=url of the webhook that triggers job notifications	
+		```
 
 ## Usage
 Run the scraper via CLI:
