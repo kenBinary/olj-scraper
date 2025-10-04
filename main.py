@@ -1,7 +1,10 @@
+import os
 import random
 import time
 import asyncio
 from typing import List
+from dotenv import load_dotenv
+import requests
 from scraper.scrape_all import scrape_all_job_listings
 from scraper.job_detail_scraper import scrape_job_detail
 from db.models.Job import Job
@@ -18,7 +21,10 @@ from utils.remove_nulls import remove_null_entries
 
 
 def main():
+    load_dotenv()
     args = init_cli_args()
+    WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "0.0.0.0:8080/webhook/trigger")
+
     logger = Logger("main").get()
     logger.info(f"Running in {'development' if args.dev else 'production'} mode")
 
@@ -47,15 +53,6 @@ def main():
         jobs.append(jobDetail)
         time.sleep(random.uniform(2, 5))
 
-    logger.info("Generating job summaries asynchronously...")
-    start_time = time.time()
-    asyncGemini_client = init_gemini_client()
-    asyncio.run(generate_summaries_async(asyncGemini_client, jobs))
-    end_time = time.time()
-    logger.info(
-        f"Generated {len(jobs)} summaries in {end_time - start_time:.2f} seconds"
-    )
-
     logger.info("Inserting jobs into the database...")
     if args.prod:
         logger.info("Using remote database")
@@ -66,8 +63,9 @@ def main():
         engine = engine_init_local()
         SessionLocal = create_session_factory(engine)
 
-    jobs_added = 0
     with SessionLocal() as session:
+        logger.info("Filtering out jobs that already exist in the database...")
+        new_jobs: List[Job] = []
         for job in jobs:
             existing_job = job_repository.get_job_by_job_id(session, job.job_id)
             if existing_job:
@@ -75,17 +73,44 @@ def main():
                     f"Job with job_id {job.job_id} already exists. Skipping insertion."
                 )
                 continue
+            new_jobs.append(job)
+
+    logger.info("Generating job summaries asynchronously...")
+    start_time = time.time()
+    asyncGemini_client = init_gemini_client()
+    asyncio.run(generate_summaries_async(asyncGemini_client, new_jobs))
+    end_time = time.time()
+    logger.info(
+        f"Generated {len(new_jobs)} summaries in {end_time - start_time:.2f} seconds"
+    )
+
+    jobs_added = 0
+    with SessionLocal() as session:
+        for job in new_jobs:
             jobs_added += 1
             job_repository.add_job(session, job)
 
         session.commit()
     logger.info(f"Inserted {jobs_added} jobs into the database.")
-    logger.info(f"Ignored {len(jobs) - jobs_added} duplicate jobs.")
+    logger.info(f"Ignored {len(new_jobs) - jobs_added} duplicate jobs.")
     end_time_scraping = time.time()
     logger.info(
         f"Total execution time: {end_time_scraping - start_time_scraping:.2f} seconds"
     )
     remove_null_entries(logger, env="prod" if args.prod else "dev")
+
+    if jobs_added > 0:
+        try:
+            response = requests.post(WEBHOOK_URL)
+        except Exception as e:
+            logger.error(f"Failed to send webhook notification: {e}")
+
+        if response.status_code == 200:
+            logger.info("Job notification triggered successfully")
+        else:
+            logger.error(f"Failed to trigger notification: {response.status_code}")
+    else:
+        logger.info("No new jobs added, skipping webhook notification")
 
 
 if __name__ == "__main__":
