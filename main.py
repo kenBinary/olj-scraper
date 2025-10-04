@@ -63,8 +63,8 @@ def main():
         engine = engine_init_local()
         SessionLocal = create_session_factory(engine)
 
+    logger.info("Filtering out jobs that already exist in the database...")
     with SessionLocal() as session:
-        logger.info("Filtering out jobs that already exist in the database...")
         new_jobs: List[Job] = []
         for job in jobs:
             existing_job = job_repository.get_job_by_job_id(session, job.job_id)
@@ -75,24 +75,28 @@ def main():
                 continue
             new_jobs.append(job)
 
-    logger.info("Generating job summaries asynchronously...")
-    start_time = time.time()
-    asyncGemini_client = init_gemini_client()
-    asyncio.run(generate_summaries_async(asyncGemini_client, new_jobs))
-    end_time = time.time()
-    logger.info(
-        f"Generated {len(new_jobs)} summaries in {end_time - start_time:.2f} seconds"
-    )
+        logger.info(f"Found {len(new_jobs)} new jobs to insert")
+        logger.info("Generating job summaries asynchronously...")
+        start_time = time.time()
+        asyncGemini_client = init_gemini_client()
+        asyncio.run(generate_summaries_async(asyncGemini_client, new_jobs))
+        end_time = time.time()
+        logger.info(
+            f"Generated {len(new_jobs)} summaries in {end_time - start_time:.2f} seconds"
+        )
 
-    jobs_added = 0
-    with SessionLocal() as session:
+        jobs_added = 0
         for job in new_jobs:
-            jobs_added += 1
-            job_repository.add_job(session, job)
+            try:
+                job_repository.add_job(session, job)
+                jobs_added += 1
+            except Exception as e:
+                logger.error(f"Error adding job {job.job_id}: {e}")
+                continue
 
         session.commit()
+
     logger.info(f"Inserted {jobs_added} jobs into the database.")
-    logger.info(f"Ignored {len(new_jobs) - jobs_added} duplicate jobs.")
     end_time_scraping = time.time()
     logger.info(
         f"Total execution time: {end_time_scraping - start_time_scraping:.2f} seconds"
