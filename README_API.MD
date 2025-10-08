@@ -17,6 +17,7 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory:
 ```env
 API_ENV=dev                           # Use 'prod' for remote database
+API_FETCH_RETRY_COUNTS=maximum_retries_when_error_occurs
 TURSO_DATABASE_URL=your_turso_db_url_here    # For production
 TURSO_AUTH_TOKEN=your_turso_auth_token_here  # For production
 ```
