@@ -1,6 +1,7 @@
 from fastapi import Depends, FastAPI, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, desc, asc
+from sqlalchemy.exc import SQLAlchemyError, DBAPIError, OperationalError
 from typing import Optional, List
 from db.engine.engine import engine_init_local, engine_init_remote
 from db.session.session import create_session_factory
@@ -16,6 +17,7 @@ app = FastAPI()
 logger = Logger("main").get()
 load_dotenv()
 environment = os.getenv("API_ENV")
+RETRY_COUNTS = int(os.getenv("API_FETCH_RETRY_COUNTS", 3))
 if environment == "prod":
     logger.info("Running in production mode")
     engine = engine_init_remote()
@@ -32,6 +34,45 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def handle_db_connection_error(error, db: Session):
+    error_str = str(error).lower()
+
+    if (
+        "stream not found" in error_str
+        or "hrana" in error_str
+        or "connection" in error_str
+    ):
+        logger.warning(f"Database connection error detected: {error}")
+
+        try:
+            db.close()
+
+            global SessionLocal, engine
+            if environment == "prod":
+                logger.info("Reconnecting to remote database...")
+                engine = engine_init_remote()
+            else:
+                logger.info("Reconnecting to local database...")
+                engine = engine_init_local()
+
+            SessionLocal = create_session_factory(engine)
+            new_db = SessionLocal()
+            logger.info("Database reconnection successful")
+            return new_db
+
+        except Exception as reconnect_error:
+            logger.error(f"Failed to reconnect to database: {reconnect_error}")
+            raise HTTPException(
+                status_code=503,
+                detail="Database service temporarily unavailable. Please try again in a moment.",
+            )
+
+    logger.error(f"Database error: {error}")
+    raise HTTPException(
+        status_code=500, detail="An error occurred while processing your request."
+    )
 
 
 @app.get("/api/jobs")
@@ -104,84 +145,113 @@ def read_jobs(
         if q:
             q = re.sub(r"[^\w\s,.-]", "", q.strip())
 
-        query = db.query(Job)
+        retry_count = 0
 
-        filters = []
+        while retry_count <= RETRY_COUNTS:
+            try:
+                query = db.query(Job)
 
-        if salary:
-            salary = salary.strip()
-            filters.append(func.lower(Job.salary).like(f"%{salary.lower()}%"))
+                filters = []
 
-        if posted_after:
-            filters.append(Job.date_created >= posted_after)
+                if salary:
+                    salary = salary.strip()
+                    filters.append(func.lower(Job.salary).like(f"%{salary.lower()}%"))
 
-        if posted_before:
-            filters.append(Job.date_created <= posted_before)
+                if posted_after:
+                    filters.append(Job.date_created >= posted_after)
 
-        if filters:
-            query = query.filter(and_(*filters))
+                if posted_before:
+                    filters.append(Job.date_created <= posted_before)
 
-        if sort_by:
-            sort_column = getattr(Job, sort_by)
-            if order == "desc":
-                query = query.order_by(desc(sort_column))
-            else:
-                query = query.order_by(asc(sort_column))
-        else:
-            query = query.order_by(desc(Job.date_created))
+                if filters:
+                    query = query.filter(and_(*filters))
 
-        total_count = query.count()
-        jobs = query.offset(offset).limit(limit).all()
+                if sort_by:
+                    sort_column = getattr(Job, sort_by)
+                    if order == "desc":
+                        query = query.order_by(desc(sort_column))
+                    else:
+                        query = query.order_by(asc(sort_column))
+                else:
+                    query = query.order_by(desc(Job.date_created))
 
-        if q:
-            keywords = [
-                keyword.strip().lower() for keyword in q.split(",") if keyword.strip()
-            ]
+                total_count = query.count()
+                jobs = query.offset(offset).limit(limit).all()
 
-            filtered_jobs = []
-            for job in jobs:
-                job_title = (job.title or "").strip().lower()
-                job_overview = (job.job_overview or "").strip().lower()
+                if q:
+                    keywords = [
+                        keyword.strip().lower()
+                        for keyword in q.split(",")
+                        if keyword.strip()
+                    ]
 
-                match_found = False
-                for keyword in keywords:
-                    if keyword in job_title or keyword in job_overview:
-                        match_found = True
-                        break
+                    filtered_jobs = []
+                    for job in jobs:
+                        job_title = (job.title or "").strip().lower()
+                        job_overview = (job.job_overview or "").strip().lower()
 
-                if match_found:
-                    filtered_jobs.append(job)
+                        match_found = False
+                        for keyword in keywords:
+                            if keyword in job_title or keyword in job_overview:
+                                match_found = True
+                                break
 
-            jobs = filtered_jobs
+                        if match_found:
+                            filtered_jobs.append(job)
 
-        total_pages = (total_count + limit - 1) // limit
-        current_page = (offset // limit) + 1
-        has_next = offset + limit < total_count
-        has_prev = offset > 0
+                    jobs = filtered_jobs
 
-        return {
-            "jobs": jobs,
-            "pagination": {
-                "total_count": total_count,
-                "total_pages": total_pages,
-                "current_page": current_page,
-                "limit": limit,
-                "offset": offset,
-                "has_next": has_next,
-                "has_prev": has_prev,
-            },
-            "filters_applied": {
-                "salary": salary,
-                "posted_after": posted_after,
-                "posted_before": posted_before,
-                "search_query": q,
-                "sort_by": sort_by,
-                "order": order,
-            },
-        }
+                total_pages = (total_count + limit - 1) // limit
+                current_page = (offset // limit) + 1
+                has_next = offset + limit < total_count
+                has_prev = offset > 0
 
+                return {
+                    "jobs": jobs,
+                    "pagination": {
+                        "total_count": total_count,
+                        "total_pages": total_pages,
+                        "current_page": current_page,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_next": has_next,
+                        "has_prev": has_prev,
+                    },
+                    "filters_applied": {
+                        "salary": salary,
+                        "posted_after": posted_after,
+                        "posted_before": posted_before,
+                        "search_query": q,
+                        "sort_by": sort_by,
+                        "order": order,
+                    },
+                }
+
+            except (DBAPIError, OperationalError, SQLAlchemyError) as db_error:
+                error_str = str(db_error).lower()
+                if (
+                    "stream not found" in error_str
+                    or "hrana" in error_str
+                    or "connection" in error_str
+                ) and retry_count < RETRY_COUNTS:
+
+                    logger.warning(
+                        f"Database connection error on attempt {retry_count + 1}/{RETRY_COUNTS + 1}: {db_error}"
+                    )
+                    retry_count += 1
+
+                    db = handle_db_connection_error(db_error, db)
+                    continue
+                else:
+                    raise
     except HTTPException:
         raise
+    except (DBAPIError, OperationalError, SQLAlchemyError) as db_error:
+        logger.error(f"Database error retrieving jobs: {str(db_error)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Database service temporarily unavailable. Please try again.",
+        )
     except Exception as e:
         logger.error(f"Error retrieving jobs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
