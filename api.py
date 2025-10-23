@@ -18,6 +18,7 @@ logger = Logger("main").get()
 load_dotenv()
 environment = os.getenv("API_ENV")
 RETRY_COUNTS = int(os.getenv("API_FETCH_RETRY_COUNTS", 3))
+JOB_FIELDS = [column.name for column in Job.__table__.columns]
 if environment == "prod":
     logger.info("Running in production mode")
     engine = engine_init_remote()
@@ -101,6 +102,10 @@ def read_jobs(
     q: Optional[str] = Query(
         default=None, description="Search keywords (comma-separated)"
     ),
+    exclude: Optional[str] = Query(
+        default=None,
+        description="Fields to exclude from the response (comma-separated)",
+    ),
 ):
     """
     Get jobs with pagination, filtering, sorting, and search capabilities.
@@ -175,8 +180,48 @@ def read_jobs(
                 else:
                     query = query.order_by(desc(Job.date_created))
 
+                if exclude:
+                    exclude_fields = [
+                        field.strip() for field in exclude.split(",") if field.strip()
+                    ]
+                    invalid_fields = [
+                        field for field in exclude_fields if field not in JOB_FIELDS
+                    ]
+                    if invalid_fields:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid fields in exclude parameter: {', '.join(invalid_fields)}",
+                        )
+                    if len(exclude_fields) == len(JOB_FIELDS):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Excluding all fields is not allowed.",
+                        )
+
+                    query = query.with_entities(
+                        *[
+                            getattr(Job, field)
+                            for field in JOB_FIELDS
+                            if field not in exclude_fields
+                        ]
+                    )
+
                 total_count = query.count()
-                jobs = query.offset(offset).limit(limit).all()
+                if exclude:
+                    jobs_tuple = query.offset(offset).limit(limit).all()
+                    jobs = []
+                    for job_data in jobs_tuple:
+                        job_dict = {}
+                        for idx, column in enumerate(query.column_descriptions):
+                            job_dict[column["name"]] = job_data[idx]
+
+                        for col in JOB_FIELDS:
+                            if col not in job_dict:
+                                job_dict[col] = None
+
+                        jobs.append(Job(**job_dict))
+                else:
+                    jobs: List[Job] = query.offset(offset).limit(limit).all()
 
                 if q:
                     keywords = [
